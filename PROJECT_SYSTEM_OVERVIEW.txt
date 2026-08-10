@@ -1,0 +1,771 @@
+EVIDENCE-GROUNDED JOB OPPORTUNITY INTELLIGENCE AGENT
+
+1. PROJECT OVERVIEW
+
+The Evidence-Grounded Job Opportunity Intelligence Agent is an AI-assisted decision-support system designed to help a candidate evaluate whether a job opportunity is worth applying to.
+
+Instead of acting like a generic chatbot, the system analyzes three evidence sources:
+
+- candidate information
+- job-description information
+- company/recruitment information
+
+It retrieves the most relevant evidence from those sources, compares the candidate against the role, identifies strengths and gaps, evaluates recruitment-risk signals, and produces an explainable recommendation.
+
+The final output includes:
+
+- overall fit
+- recruitment-risk level
+- matched skills
+- partially matched skills
+- missing required skills
+- missing preferred skills
+- experience-fit analysis
+- project-relevance analysis
+- seniority-fit analysis
+- strengths
+- gaps
+- concerns
+- exact supporting evidence
+- numerical score
+- final Apply / Maybe / Skip recommendation
+
+
+2. PROBLEM THE SYSTEM IS TRYING TO SOLVE
+
+Job seekers often spend significant time deciding whether an opportunity is worth applying to.
+
+A job description may contain:
+
+- required skills
+- preferred skills
+- vague experience expectations
+- deployment or cloud requirements
+- company-specific information
+- recruitment details
+
+At the same time, a candidate may have relevant knowledge spread across:
+
+- resumes
+- skill lists
+- projects
+- work experience
+- portfolio descriptions
+
+A simple keyword comparison is often insufficient.
+
+For example, a candidate may never explicitly write:
+
+“AI API development”
+
+but may have built:
+
+“a FastAPI log classification system using Sentence Transformers and an LLM fallback.”
+
+A semantic system can recognize that this project is relevant to a responsibility such as:
+
+“Build AI APIs.”
+
+The project is therefore designed to combine semantic AI reasoning with deterministic decision logic while keeping the underlying evidence visible.
+
+
+3. CORE DESIGN GOAL
+
+The core principle of the system is:
+
+Retrieve evidence first.
+Reason only from that evidence.
+Keep conclusions inspectable.
+Use deterministic code for final scoring.
+
+The system intentionally avoids allowing the LLM to freely invent a numerical fit score.
+
+Instead:
+
+RAG retrieves evidence.
+The LLM performs structured semantic analysis.
+Python validates evidence references.
+Python calculates the score.
+Python decides Apply / Maybe / Skip.
+
+
+4. CURRENT INPUT SOURCES
+
+The V1 system uses three input documents.
+
+candidate.txt
+
+Contains information such as:
+- candidate summary
+- skills
+- projects
+- experience
+- education
+
+job_description.txt
+
+Contains information such as:
+- role
+- company
+- location
+- required skills
+- preferred skills
+- responsibilities
+- experience expectations
+
+company.txt
+
+Contains collected company and recruitment evidence such as:
+- company background
+- careers information
+- known factual information
+- recruitment-risk notes
+
+These documents can later be replaced or extended with more realistic inputs such as resumes, PDFs, scraped job pages, company pages, external research, or API data.
+
+
+5. HIGH-LEVEL ARCHITECTURE
+
+The current system follows this flow:
+
+Input Documents
+    ↓
+Document Loading
+    ↓
+Section-Aware Splitting
+    ↓
+Chunking
+    ↓
+Embeddings
+    ↓
+Chroma Vector Store
+    ↓
+Source-Specific Retrieval
+    ↓
+Evidence Bundle
+    ↓
+Structured LLM Analysis
+    ↓
+Evidence Validation
+    ↓
+Deterministic Scoring
+    ↓
+Final Recommendation
+    ↓
+Trustworthy CLI Report
+
+
+6. DOCUMENT INGESTION
+
+The ingestion layer reads the candidate, job, and company documents.
+
+Each document receives metadata such as:
+
+- source filename
+- source path
+- document type
+
+Example document types:
+
+candidate
+job
+company
+
+The system does not treat all text as one undifferentiated block.
+
+Instead, it recognizes meaningful sections such as:
+
+SUMMARY
+SKILLS
+PROJECTS
+EXPERIENCE
+REQUIRED SKILLS
+PREFERRED SKILLS
+RESPONSIBILITIES
+CAREERS
+KNOWN INFORMATION
+NOTES
+
+This section-aware approach helps preserve meaning during chunking and retrieval.
+
+
+7. SECTION-AWARE CHUNKING
+
+After loading, each document is split into meaningful sections.
+
+The sections are then chunked using a recursive character splitter.
+
+Each indexed chunk contains metadata such as:
+
+- source
+- doc_type
+- section
+- chunk_id
+- character count
+
+Example chunk IDs:
+
+candidate_summary_0
+candidate_skills_0
+candidate_projects_0
+job_required_skills_0
+job_responsibilities_0
+company_known_information_0
+
+Stable chunk IDs are important because the LLM can reference them later as evidence.
+
+Very small or meaningless sections are excluded from indexing.
+
+For example, a short candidate-name-only chunk provides little semantic value and may pollute retrieval results.
+
+However, short meaningful chunks such as:
+
+LangGraph
+AWS
+
+must still be retained.
+
+This is why the system uses filtering carefully rather than assuming that every short chunk is useless.
+
+
+8. EMBEDDINGS AND VECTOR DATABASE
+
+The current V1 uses a Hugging Face Sentence Transformer embedding model.
+
+Embedding model:
+
+sentence-transformers/all-MiniLM-L6-v2
+
+Embeddings are normalized and stored in a persistent Chroma vector database.
+
+The vector database allows semantic retrieval.
+
+This means the query does not need to exactly match the words inside the document.
+
+For example:
+
+Query:
+“What projects demonstrate backend API experience?”
+
+may retrieve a project containing:
+
+“Built a FastAPI log classification system...”
+
+even if the exact phrase “backend API experience” does not appear.
+
+
+9. SOURCE-SPECIFIC RETRIEVAL
+
+One important design decision is that candidate, job, and company evidence are not searched together blindly.
+
+The system uses dedicated retrievers filtered by document type.
+
+Candidate Retriever
+Searches only candidate evidence.
+
+Job Retriever
+Searches only job-description evidence.
+
+Company Retriever
+Searches only company evidence.
+
+This avoids source mixing.
+
+For example, when asking:
+
+“What technical skills does the candidate have?”
+
+a job-description chunk listing required skills should not appear as candidate evidence.
+
+Metadata filtering helps enforce this separation.
+
+
+10. FOCUSED EVIDENCE RETRIEVAL
+
+The system does not use one generic retrieval query.
+
+It runs focused queries for specific analysis dimensions.
+
+Examples include:
+
+Candidate:
+- technical skills
+- projects
+- practical/professional experience
+
+Job:
+- required skills
+- preferred skills
+- responsibilities
+- experience expectations
+
+Company:
+- factual company information
+- recruitment legitimacy signals
+- suspicious payment or recruitment signals
+
+The retrieved documents are then deduplicated and grouped into an EvidenceBundle.
+
+This creates a more structured evidence set for the analysis stage.
+
+
+11. EVIDENCE BUNDLE
+
+The EvidenceBundle groups retrieved documents by purpose.
+
+Examples:
+
+candidate_skills
+candidate_projects
+candidate_experience
+
+job_required_skills
+job_preferred_skills
+job_responsibilities
+job_experience
+
+company_background
+company_recruitment_risk
+
+This is useful because downstream analysis does not need to understand how retrieval itself works.
+
+It receives organized evidence categories instead.
+
+
+12. STRUCTURED LLM ANALYSIS
+
+The retrieved evidence is formatted and passed to a Gemini model through LangChain.
+
+The model is instructed to:
+
+- use only supplied evidence
+- avoid inventing skills or facts
+- distinguish required from preferred skills
+- classify skills as matched, partial, or missing
+- evaluate experience fit separately
+- evaluate project relevance separately
+- evaluate seniority fit separately
+- evaluate observable recruitment-risk signals
+- reference only supplied chunk IDs
+- copy source evidence directly
+- avoid producing the final numerical score
+
+The model returns a Pydantic-validated structured object rather than free-form text.
+
+This makes the output easier to validate and score.
+
+
+13. SKILL ANALYSIS
+
+Each job skill is classified using one of three states:
+
+Matched
+The candidate evidence clearly supports the skill.
+
+Partial
+The evidence supports limited, beginner-level, indirect, or incomplete experience.
+
+Missing
+The role requires or prefers the skill, but the candidate evidence does not demonstrate it.
+
+The system also records whether each skill is:
+
+Required
+or
+Preferred
+
+This distinction later affects scoring.
+
+
+14. FIT ANALYSIS
+
+The model evaluates three separate dimensions.
+
+Experience Fit
+
+Measures how well the candidate’s practical experience aligns with the work expected by the role.
+
+Project Relevance
+
+Measures whether the candidate’s projects directly demonstrate skills or responsibilities relevant to the role.
+
+Seniority Fit
+
+Measures whether explicit evidence supports alignment with the requested seniority or amount of experience.
+
+These are deliberately separated.
+
+A candidate can have:
+
+strong project relevance
+
+while still having:
+
+unknown seniority
+
+because strong technical projects do not automatically prove a specific number of years of professional experience.
+
+
+15. RECRUITMENT-RISK ANALYSIS
+
+The company/recruitment layer evaluates observable signals only.
+
+Examples of positive signals:
+
+- the official careers page lists the role
+- company information is consistent with the job evidence
+
+Examples of risk signals could include:
+
+- suspicious payment requests
+- unusual recruitment demands
+- inconsistent company details
+- unsupported claims
+
+The model is instructed not to claim that a company is completely:
+
+- legitimate
+- safe
+- verified
+- fraud-free
+
+An official careers-page listing is treated as a positive signal, not absolute proof.
+
+
+16. EVIDENCE VALIDATION
+
+Structured output alone is not sufficient.
+
+An LLM could still reference a chunk that does not exist.
+
+The application therefore builds a chunk registry and validates evidence references.
+
+Current validation checks include:
+
+- referenced chunk ID exists
+- claimed source matches the actual source
+- claimed document type matches the actual type
+- evidence text appears in the cited chunk
+- skill evidence chunk IDs exist
+- fit-assessment chunk IDs exist
+
+This adds a second validation layer.
+
+Pydantic validation:
+Checks that the output structure is correct.
+
+Evidence validation:
+Checks that evidence references are grounded in retrieved documents.
+
+
+17. WHY EVIDENCE TEXT IS SHOWN SEPARATELY
+
+The CLI distinguishes between:
+
+Reasoning
+
+and:
+
+Source Evidence
+
+This distinction is intentional.
+
+Reasoning is the LLM’s interpretation.
+
+Source Evidence is text that actually came from the retrieved document.
+
+A valid citation does not automatically guarantee that every interpretation is logically perfect.
+
+Keeping the raw evidence visible allows a user to inspect whether the conclusion seems justified.
+
+
+18. DETERMINISTIC SCORING
+
+The LLM does not decide the final score.
+
+Python applies a fixed 100-point scoring model.
+
+Current categories:
+
+Skill Match                35
+Experience Fit             20
+Project Relevance          20
+Seniority Fit              10
+Company / Recruitment Risk 10
+Additional Requirements     5
+
+The score is explainable because each component can be traced back to structured analysis fields.
+
+The final recommendation is also deterministic:
+
+75 or above → APPLY
+55 to below 75 → MAYBE
+below 55 → SKIP
+
+A high recruitment-risk classification overrides the score and forces:
+
+SKIP
+
+
+19. WHY THIS HYBRID DESIGN IS USED
+
+The system combines two kinds of reasoning.
+
+LLM reasoning is useful for:
+- semantic comparisons
+- understanding project relevance
+- interpreting natural-language requirements
+- distinguishing partial from strong evidence
+
+Deterministic Python is useful for:
+- fixed scoring rules
+- weights
+- thresholds
+- validation
+- reproducibility
+- recommendation policy
+
+This produces a hybrid architecture:
+
+Semantic understanding → LLM
+
+Business logic and scoring → Python
+
+
+20. TRUSTWORTHY RESULT LAYER
+
+The CLI report currently displays:
+
+- final score
+- recommendation
+- overall fit
+- recruitment-risk level
+- score breakdown
+- every skill match
+- required/preferred status
+- reasoning
+- evidence chunk IDs
+- experience-fit reasoning
+- project-relevance reasoning
+- seniority-fit reasoning
+- strengths
+- gaps
+- concerns
+- exact supporting evidence
+- final summary
+
+The goal is not merely to say:
+
+“Apply.”
+
+The goal is to explain:
+
+“Why should I apply or not apply?”
+
+
+21. CURRENT PROJECT STRUCTURE
+
+The application is organized by responsibility.
+
+app/ingestion/
+Handles loading, splitting, and indexing.
+
+app/retrieval/
+Handles vector storage, retrievers, and evidence collection.
+
+app/analysis/
+Handles schemas, structured LLM analysis, evidence validation, and scoring.
+
+app/services/
+Coordinates the full assessment workflow.
+
+app/presentation/
+Formats the final result for the console.
+
+app/main.py
+Acts as the application entry point.
+
+
+22. END-TO-END APPLICATION FLOW
+
+When the application runs:
+
+1. Existing indexed data is loaded from Chroma.
+2. Focused semantic queries retrieve candidate evidence.
+3. Focused semantic queries retrieve job evidence.
+4. Focused semantic queries retrieve company evidence.
+5. Retrieved evidence is deduplicated.
+6. Candidate/job/company evidence is formatted separately.
+7. The LLM performs structured analysis.
+8. Pydantic validates the response structure.
+9. Evidence references are checked against retrieved chunks.
+10. Python calculates component scores.
+11. Python calculates the final score.
+12. Python applies recommendation thresholds and risk guardrails.
+13. The presentation layer generates an explainable report.
+
+
+23. CURRENT V1 OUTPUT EXAMPLE
+
+A typical result may look conceptually like:
+
+Final Score:
+65.42 / 100
+
+Recommendation:
+MAYBE
+
+Skill Match:
+Python      → Matched
+FastAPI     → Matched
+RAG         → Matched
+LangChain   → Missing
+Docker      → Partial
+LangGraph   → Missing
+AWS         → Missing
+
+Experience Fit:
+Partial
+
+Project Relevance:
+Strong
+
+Seniority Fit:
+Unknown
+
+Recruitment Risk:
+Low
+
+The report then provides the reasons and supporting source excerpts behind those conclusions.
+
+
+24. WHAT MAKES THIS DIFFERENT FROM A BASIC RAG CHATBOT
+
+A basic RAG application often follows:
+
+Question
+→ retrieve chunks
+→ generate an answer
+
+This project adds additional system layers:
+
+- source-specific retrieval
+- multiple focused retrieval queries
+- structured evidence grouping
+- Pydantic structured output
+- skill-level comparisons
+- separate fit dimensions
+- chunk-level citations
+- evidence-reference validation
+- deterministic weighted scoring
+- risk guardrails
+- explainable recommendations
+- trustworthy evidence presentation
+
+The project is therefore closer to an evidence-grounded decision-support pipeline than a general-purpose document chatbot.
+
+
+25. CURRENT LIMITATIONS
+
+This is still V1.
+
+Current limitations include:
+
+- input files are currently manually prepared text files
+- retrieval currently uses dense vector similarity
+- no hybrid BM25 + vector retrieval yet
+- no dedicated reranker yet
+- no query decomposition yet
+- no multimodal document handling yet
+- no automated company research yet
+- no full entailment checker yet
+- semantic labels still depend on LLM reasoning
+- score weights are manually designed heuristics
+- recommendation thresholds are not statistically calibrated
+- no production web UI yet
+- no large-scale evaluation dataset yet
+
+
+26. PLANNED ADVANCED RAG UPGRADES
+
+The project is intentionally being continued while learning Advanced RAG.
+
+Planned areas include:
+
+Query Enhancement
+Improve retrieval queries before searching.
+
+Query Decomposition
+Break complex information needs into smaller retrieval tasks.
+
+Metadata Filtering
+Use richer metadata to restrict retrieval more precisely.
+
+Hybrid Retrieval
+Combine semantic vector search with lexical search.
+
+Reranking
+Retrieve a larger candidate set and use a stronger relevance model to reorder evidence.
+
+Multimodal RAG
+Support evidence from richer document formats where useful.
+
+Agentic RAG
+Allow retrieval behavior to become more dynamic and goal-driven.
+
+Cache-Augmented Generation
+Reduce repeated computation and improve efficiency.
+
+RAG Evaluation / Hallucination Reduction
+Measure retrieval quality, grounding, answer faithfulness, and evidence support.
+
+
+27. FUTURE DIRECTION
+
+The long-term version could accept:
+
+- a real resume or portfolio
+- a live job description
+- a company URL
+- careers-page evidence
+- external company research
+
+and return a complete evidence-backed opportunity assessment.
+
+Possible future features include:
+
+- automatic resume parsing
+- job-page ingestion
+- company research
+- requirement extraction
+- hybrid retrieval
+- reranking
+- application prioritization
+- configurable scoring profiles
+- comparison across multiple jobs
+- ranking opportunities
+- evidence-grounded application recommendations
+- web/API interface
+
+
+28. PROJECT PHILOSOPHY
+
+The project is not intended to replace human judgment.
+
+A job seeker may still choose to apply to a role with a low score because:
+
+- they want to stretch into a new area
+- preferred requirements may not actually be strict
+- the resume may omit relevant experience
+- they may value the company or role for other reasons
+
+The system is intended to reduce uncertainty and make the decision easier to inspect.
+
+Its core philosophy is:
+
+Do not merely generate a recommendation.
+
+Show the evidence.
+Explain the reasoning.
+Make the scoring transparent.
+Keep the final decision understandable.

@@ -1,0 +1,15 @@
+COMPANY
+ExampleAI
+
+ABOUT
+ExampleAI builds AI automation products.
+
+CAREERS
+The company states that engineering roles are remote.
+
+KNOWN INFORMATION
+Founded in 2022.
+Official careers page lists the current AI Engineer opening.
+
+NOTES
+No suspicious payment or recruitment requests found in the collected evidence.

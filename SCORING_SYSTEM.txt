@@ -1,0 +1,412 @@
+SCORING SYSTEM — EVIDENCE-GROUNDED JOB OPPORTUNITY INTELLIGENCE AGENT
+
+1. PURPOSE OF THE SCORING SYSTEM
+
+The scoring system converts the structured analysis of a candidate-job match into a consistent numerical score out of 100.
+
+The goal is not to let the LLM invent an arbitrary “fit score.” Instead, the LLM performs semantic analysis of the retrieved evidence, while Python applies fixed weights, mappings, and recommendation thresholds.
+
+This separation is intentional:
+
+LLM:
+- understands natural-language evidence
+- identifies matched, partial, and missing skills
+- evaluates experience fit
+- evaluates project relevance
+- evaluates seniority fit
+- assesses recruitment-risk signals
+
+Python:
+- converts those structured judgments into numbers
+- applies fixed weights
+- calculates the final score
+- applies the final Apply / Maybe / Skip recommendation rule
+
+This makes the scoring system more transparent, reproducible, and easier to audit than asking an LLM to directly return a number such as “82/100.”
+
+
+2. TOTAL SCORE
+
+The final score is out of 100 points.
+
+Score Breakdown:
+
+Skill Match                35 points
+Experience Fit             20 points
+Project Relevance          20 points
+Seniority Fit              10 points
+Company / Recruitment Risk 10 points
+Additional Requirements     5 points
+
+TOTAL                     100 points
+
+
+3. WHY THESE WEIGHTS ARE USED
+
+3.1 Skill Match — 35%
+
+Skill match receives the highest weight because the candidate must first satisfy the core technical requirements of the role.
+
+A candidate with excellent projects but several missing required skills should not receive the same score as a candidate who directly satisfies the job requirements.
+
+Required skills are also weighted more heavily than preferred skills.
+
+Importance weights:
+
+Required skill  = 2.0
+Preferred skill = 1.0
+
+Skill-status values:
+
+Matched = 1.0
+Partial = 0.5
+Missing = 0.0
+
+For each skill:
+
+earned_score = status_value × importance_weight
+
+The skill score is then normalized to 35 points:
+
+skill_score = (earned_weight / total_possible_weight) × 35
+
+Example:
+
+Required:
+Python     matched → 1.0 × 2 = 2
+FastAPI    matched → 1.0 × 2 = 2
+RAG        matched → 1.0 × 2 = 2
+LangChain  missing → 0.0 × 2 = 0
+Docker     partial → 0.5 × 2 = 1
+
+Preferred:
+LangGraph  missing → 0.0 × 1 = 0
+AWS        missing → 0.0 × 1 = 0
+
+Earned weight = 7
+Possible weight = 12
+
+7 / 12 = 0.5833
+
+0.5833 × 35 = 20.42
+
+Skill Match Score = 20.42 / 35
+
+Why required skills are weighted more:
+A missing required skill should affect the result more strongly than a missing nice-to-have skill.
+
+
+4. EXPERIENCE FIT — 20%
+
+Experience Fit measures how well the candidate’s practical experience aligns with the type of work expected in the role.
+
+The LLM does not produce a numerical score. It must return one of four structured labels:
+
+Strong
+Partial
+Weak
+Unknown
+
+Python maps those labels to fixed ratios:
+
+Strong  = 0.90
+Partial = 0.65
+Weak    = 0.35
+Unknown = 0.50
+
+The final experience score is:
+
+experience_score = ratio × 20
+
+Therefore:
+
+Strong  = 18.0 / 20
+Partial = 13.0 / 20
+Weak    = 7.0 / 20
+Unknown = 10.0 / 20
+
+Why the maximum semantic score is 90% rather than 100%:
+The analysis is based on retrieved evidence, which may not describe the candidate’s entire background. A “strong” semantic match therefore receives a very high score without treating the available evidence as absolute proof of perfect fit.
+
+
+5. PROJECT RELEVANCE — 20%
+
+Project Relevance measures whether the candidate has built projects that directly relate to the responsibilities or technologies required by the job.
+
+Examples of strong project relevance could include:
+- building APIs when the job requires API development
+- implementing retrieval pipelines for a RAG role
+- building NLP or Transformer systems for an NLP-focused role
+- deploying or integrating AI services when the job involves production AI systems
+
+The same fixed semantic mapping is used:
+
+Strong  = 0.90
+Partial = 0.65
+Weak    = 0.35
+Unknown = 0.50
+
+Therefore:
+
+Strong  = 18.0 / 20
+Partial = 13.0 / 20
+Weak    = 7.0 / 20
+Unknown = 10.0 / 20
+
+Important design decision:
+Earlier versions tried to calculate project relevance by searching for keywords inside LLM-generated “strengths” text. This caused scores to change when the LLM reworded the same conclusion.
+
+The current system instead requires a dedicated structured project_relevance field. This makes repeated runs much more stable because the numerical score depends on a controlled label rather than free-form prose.
+
+
+6. SENIORITY FIT — 10%
+
+Seniority Fit measures whether the available evidence supports alignment with the requested level of experience or seniority.
+
+Examples:
+- explicit years of professional experience
+- role titles
+- stated seniority level
+- other evidence that clearly establishes experience level
+
+The system is specifically instructed not to infer seniority only from:
+- project complexity
+- number of technologies
+- skill lists
+- impressive portfolio work
+
+This prevents the system from incorrectly assuming that someone has “1–3 years of experience” simply because their projects are technically strong.
+
+Mapping:
+
+Strong  = 0.90 → 9.0 / 10
+Partial = 0.65 → 6.5 / 10
+Weak    = 0.35 → 3.5 / 10
+Unknown = 0.50 → 5.0 / 10
+
+Why Unknown receives 50%:
+Unknown means the available evidence does not establish seniority clearly.
+
+Giving 0 would unfairly punish the candidate for missing evidence.
+Giving 10 would unfairly reward the candidate without evidence.
+
+A neutral midpoint is therefore used for V1.
+
+
+7. COMPANY / RECRUITMENT RISK — 10%
+
+The company-risk component evaluates observable recruitment-risk signals in the available company evidence.
+
+Possible structured values:
+
+Low
+Medium
+High
+Unknown
+
+Current point mapping:
+
+Low     = 9.0 / 10
+Medium  = 5.0 / 10
+High    = 0.0 / 10
+Unknown = 6.0 / 10
+
+The system is deliberately conservative in its wording.
+
+For example:
+
+“Official careers page lists the role”
+is treated as a positive verification signal.
+
+“No suspicious payment or recruitment requests were found”
+means only that no such signal was observed in the collected evidence.
+
+Neither statement is treated as proof that a company is completely legitimate, safe, verified, or fraud-free.
+
+Why Unknown receives 6/10 instead of 0:
+A lack of company evidence is not itself evidence of fraud. The system therefore avoids heavily penalizing an opportunity simply because the company dataset is incomplete.
+
+Why High receives 0:
+A high recruitment-risk classification is treated as a critical warning signal.
+
+
+8. ADDITIONAL REQUIREMENTS — 5%
+
+This component measures preferred or additional requirements.
+
+For the current V1 implementation, preferred skills are used as the main signal.
+
+The same skill-status values are used:
+
+Matched = 1.0
+Partial = 0.5
+Missing = 0.0
+
+The score is normalized across all preferred skills:
+
+additional_score =
+(sum of preferred skill status values / number of preferred skills) × 5
+
+Example:
+
+LangGraph = missing → 0
+AWS       = missing → 0
+
+Additional Requirements Score = 0 / 5
+
+If no preferred requirements exist, the candidate receives the full 5 points because there is no additional requirement to satisfy.
+
+
+9. FINAL SCORE
+
+The final score is the sum of all six components:
+
+final_score =
+skill_match
++ experience_fit
++ project_relevance
++ seniority_fit
++ company_risk
++ additional_requirements
+
+Example from the current test case:
+
+Skill Match              20.42 / 35
+Experience Fit           13.00 / 20
+Project Relevance        18.00 / 20
+Seniority Fit             5.00 / 10
+Company / Risk            9.00 / 10
+Additional Requirements   0.00 / 5
+
+Final Score = 65.42 / 100
+
+
+10. FINAL RECOMMENDATION
+
+The final Apply / Maybe / Skip decision is produced by Python, not by the LLM.
+
+Current thresholds:
+
+Score >= 75 → APPLY
+Score >= 55 → MAYBE
+Score < 55  → SKIP
+
+There is also a recruitment-risk guardrail:
+
+If fraud_risk == "high":
+    final recommendation = SKIP
+
+This means even a technically strong candidate-job match cannot receive an Apply recommendation when the system identifies high recruitment risk.
+
+
+11. WHY THE LLM DOES NOT GENERATE THE FINAL SCORE
+
+An LLM could easily return a number such as:
+
+“Candidate fit: 82/100”
+
+However, that score would be difficult to reproduce or audit.
+
+Two runs could produce:
+78
+83
+80
+
+even when the evidence is unchanged.
+
+The current system instead uses the LLM only where natural-language reasoning is genuinely useful, while deterministic Python code handles numerical calculation.
+
+This provides:
+
+- more stable scores
+- transparent weights
+- easier debugging
+- easier testing
+- explainable score changes
+- configurable business rules
+- less dependence on arbitrary LLM judgment
+
+
+12. WHY THE SYSTEM STILL USES STRUCTURED LLM JUDGMENTS
+
+Not every category can be reduced to simple keyword matching.
+
+For example:
+
+“Built a FastAPI log classification system using Sentence Transformers and an LLM fallback.”
+
+may be relevant to a role that says:
+
+“Build AI APIs and develop retrieval pipelines.”
+
+Understanding that relationship requires semantic reasoning.
+
+The LLM therefore returns controlled structured values such as:
+
+experience_fit = partial
+project_relevance = strong
+seniority_fit = unknown
+
+Python then maps those values to fixed scores.
+
+This creates a hybrid approach:
+
+Natural-language understanding → LLM
+Numerical policy / decision logic → deterministic code
+
+
+13. EVIDENCE-GROUNDED SCORING
+
+The LLM receives only retrieved evidence from:
+- candidate documents
+- job documents
+- company documents
+
+Important analysis fields include evidence chunk IDs.
+
+Examples:
+
+candidate_skills_0
+candidate_projects_0
+job_required_skills_0
+job_responsibilities_0
+company_known_information_0
+
+The application validates that referenced chunk IDs actually exist.
+
+For explicit evidence items, it also checks:
+- source name
+- source type
+- whether the evidence text actually occurs in the retrieved chunk
+
+Therefore the system does not simply generate a score. It attempts to connect the score back to inspectable evidence.
+
+
+14. CURRENT V1 LIMITATIONS
+
+The scoring model is intentionally a V1 and is expected to evolve.
+
+Current limitations include:
+
+- Semantic fit labels still depend on LLM judgment.
+- The weights are manually designed rather than learned from historical hiring outcomes.
+- Company-risk scoring uses a limited evidence set.
+- Missing evidence may sometimes produce an Unknown result even when the candidate actually possesses the skill or experience.
+- The current system does not yet perform advanced reranking or hybrid retrieval.
+- Citation correctness does not automatically prove that every LLM interpretation is logically entailed by the evidence.
+- The current recommendation thresholds are configurable heuristics rather than statistically calibrated probabilities.
+
+Future Advanced RAG work can improve retrieval quality, evidence ranking, hallucination reduction, and evaluation.
+
+
+15. DESIGN PRINCIPLE
+
+The scoring system follows one central principle:
+
+Use the LLM for semantic understanding.
+Use deterministic code for policy and arithmetic.
+Keep evidence inspectable.
+
+The final score is therefore not intended to be an unquestionable prediction of hiring success.
+
+It is an explainable decision-support score that helps a candidate judge whether an opportunity appears worth applying to based on the evidence currently available.

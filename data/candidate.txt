@@ -1,0 +1,28 @@
+NAME
+Candidate Name
+
+SUMMARY
+AI/ML engineer focused on NLP, Transformers, RAG, FastAPI and backend AI systems.
+
+SKILLS
+Python
+FastAPI
+PyTorch
+Transformers
+Sentence Transformers
+PostgreSQL
+Docker - beginner
+
+PROJECTS
+
+Log Classification System
+Built a FastAPI log classification system using regex, Sentence Transformers and an LLM fallback.
+
+Fake Review Detector
+Fine-tuned DistilBERT for fake review classification.
+
+Speech Analysis Tool
+Built a pipeline using Whisper, Silero VAD and openSMILE.
+
+EXPERIENCE
+...

@@ -1,0 +1,8 @@
+Skill Match                35%
+Experience Fit             20%
+Project Relevance          20%
+Seniority Fit              10%
+Company / Recruitment Risk 10%
+Additional Requirements     5%
+
+TOTAL                     100%
