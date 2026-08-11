@@ -3,7 +3,17 @@ from dataclasses import dataclass
 from langchain_core.documents import Document
 from app.retrieval.vector_store import get_vector_store
 from app.retrieval.retrievers import (get_candidate_retriever, get_job_retriever, get_company_retriever,)
-
+from app.retrieval.queries import (
+    CANDIDATE_SKILLS_QUERY,
+    CANDIDATE_PROJECTS_QUERY,
+    CANDIDATE_EXPERIENCE_QUERY,
+    JOB_REQUIRED_SKILLS_QUERY,
+    JOB_PREFERRED_SKILLS_QUERY,
+    JOB_RESPONSIBILITIES_QUERY,
+    JOB_EXPERIENCE_QUERY,
+    COMPANY_BACKGROUND_QUERY,
+    COMPANY_RISK_QUERY,
+)
 
 @dataclass
 class EvidenceBundle:
@@ -43,32 +53,23 @@ def retrieve_evidence() -> EvidenceBundle:
     job_retriever = get_job_retriever(k=4, vector_store=vector_store)
     company_retriever = get_company_retriever(k=4, vector_store=vector_store)
 
-    candidate_skills = candidate_retriever.invoke("What technical skills does the candidate have?")
+    candidate_skills = candidate_retriever.invoke(CANDIDATE_SKILLS_QUERY)
 
-    candidate_projects = candidate_retriever.invoke(
-        "What projects demonstrate the candidate's AI, NLP, backend, "
-        "API, RAG, and software engineering experience?"
-    )
+    candidate_projects = candidate_retriever.invoke(CANDIDATE_PROJECTS_QUERY)
 
-    candidate_experience = candidate_retriever.invoke("What professional or practical experience does the candidate have?")
+    candidate_experience = candidate_retriever.invoke(CANDIDATE_EXPERIENCE_QUERY)
 
-    job_required_skills = job_retriever.invoke("What technical skills are required for this job?")
+    job_required_skills = job_retriever.invoke(JOB_REQUIRED_SKILLS_QUERY)
 
-    job_preferred_skills = job_retriever.invoke("What preferred or nice-to-have skills are mentioned for this job?")
+    job_preferred_skills = job_retriever.invoke(JOB_PREFERRED_SKILLS_QUERY)
 
-    job_responsibilities = job_retriever.invoke("What will the person in this role be responsible for doing?")
+    job_responsibilities = job_retriever.invoke(JOB_RESPONSIBILITIES_QUERY)
 
-    job_experience = job_retriever.invoke("What experience or seniority level does this job require or prefer?")
+    job_experience = job_retriever.invoke(JOB_EXPERIENCE_QUERY)
 
-    company_background = company_retriever.invoke(
-        "What factual information do we have about the company "
-        "and this job opening?"
-    )
+    company_background = company_retriever.invoke(COMPANY_BACKGROUND_QUERY)
 
-    company_recruitment_risk = company_retriever.invoke(
-        "What evidence is available about recruitment legitimacy, "
-        "suspicious payment requests, or other job-posting risk signals?"
-    )
+    company_recruitment_risk = company_retriever.invoke(COMPANY_RISK_QUERY)
 
     return EvidenceBundle(
         candidate_skills=candidate_skills,
