@@ -1,11 +1,10 @@
 from dotenv import load_dotenv
-
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-
+from app.cache.simple_cache import SimpleCache
 
 load_dotenv()
-
+rewrite_cache = SimpleCache()
 
 model = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", temperature=0,)
 
@@ -46,6 +45,14 @@ query_rewrite_chain = (rewrite_prompt | model)
 
 
 def rewrite_query(query: str) -> str:
+    cached = rewrite_cache.get(query)
+
+    if cached is not None:
+        print("[CACHE HIT] query rewrite")
+        return cached
+
+    print("[CACHE MISS] query rewrite")
+
     response = query_rewrite_chain.invoke({"query": query})
 
     text_parts = []
@@ -61,5 +68,7 @@ def rewrite_query(query: str) -> str:
 
     if not rewritten_query:
         raise ValueError("Query rewriter returned no text content.")
+
+    rewrite_cache.set(query, rewritten_query)
 
     return rewritten_query
