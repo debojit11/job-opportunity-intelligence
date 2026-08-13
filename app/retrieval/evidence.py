@@ -49,23 +49,40 @@ def deduplicate_documents(documents: list[Document]) -> list[Document]:
 
 def retrieve_evidence() -> EvidenceBundle:
     vector_store = get_vector_store()
-    candidate_retriever = get_candidate_retriever(k=3, vector_store=vector_store)
-    job_retriever = get_job_retriever(k=4, vector_store=vector_store)
-    company_retriever = get_company_retriever(k=4, vector_store=vector_store)
 
-    candidate_skills = candidate_retriever.invoke(CANDIDATE_SKILLS_QUERY)
+    candidate_skills_retriever = get_candidate_retriever(k=3, vector_store=vector_store, section="skills",)
 
-    candidate_projects = candidate_retriever.invoke(CANDIDATE_PROJECTS_QUERY)
+    candidate_projects_retriever = get_candidate_retriever(k=3, vector_store=vector_store, section="projects",)
 
-    candidate_experience = candidate_retriever.invoke(CANDIDATE_EXPERIENCE_QUERY)
+    # Keep broad for now because current candidate experience
+    # evidence is sparse / may not have a useful experience section.
+    candidate_experience_retriever = get_candidate_retriever(k=3, vector_store=vector_store,)
 
-    job_required_skills = job_retriever.invoke(JOB_REQUIRED_SKILLS_QUERY)
+    job_required_retriever = get_job_retriever(k=4, vector_store=vector_store, section="required_skills",)
 
-    job_preferred_skills = job_retriever.invoke(JOB_PREFERRED_SKILLS_QUERY)
+    job_preferred_retriever = get_job_retriever(k=4, vector_store=vector_store, section="preferred_skills",)
 
-    job_responsibilities = job_retriever.invoke(JOB_RESPONSIBILITIES_QUERY)
+    job_responsibilities_retriever = get_job_retriever(k=4, vector_store=vector_store, section="responsibilities",)
 
-    job_experience = job_retriever.invoke(JOB_EXPERIENCE_QUERY)
+    job_experience_retriever = get_job_retriever(k=4, vector_store=vector_store, section="experience",)
+
+    # Keep company retrieval broad because useful evidence
+    # can live across about/careers/known_information/notes.
+    company_retriever = get_company_retriever(k=4, vector_store=vector_store,)
+
+    candidate_skills = candidate_skills_retriever.invoke(CANDIDATE_SKILLS_QUERY)
+
+    candidate_projects = candidate_projects_retriever.invoke(CANDIDATE_PROJECTS_QUERY)
+
+    candidate_experience = candidate_experience_retriever.invoke(CANDIDATE_EXPERIENCE_QUERY)
+
+    job_required_skills = job_required_retriever.invoke(JOB_REQUIRED_SKILLS_QUERY)
+
+    job_preferred_skills = job_preferred_retriever.invoke(JOB_PREFERRED_SKILLS_QUERY)
+
+    job_responsibilities = job_responsibilities_retriever.invoke(JOB_RESPONSIBILITIES_QUERY)
+
+    job_experience = job_experience_retriever.invoke(JOB_EXPERIENCE_QUERY)
 
     company_background = company_retriever.invoke(COMPANY_BACKGROUND_QUERY)
 
